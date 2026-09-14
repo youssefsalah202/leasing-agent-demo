@@ -6,15 +6,17 @@ A working demo of an AI leasing assistant system, built in two phases:
   prospect in a CRM, answers housing questions grounded in a small FAQ
   knowledge base (RAG), and can book a property tour — writing the booking
   back to the CRM and replying over SMS.
-- **Phase 2 — nightly triage & QC** (automated follow-up next): triage
-  classifies every lead's SMS *and* phone-call activity since the last run
-  and updates the CRM — the only place call transcripts ever get processed,
-  since phase 1's live agent only handles SMS. QC is an independent second
-  pass that checks triage's work against the raw conversation and corrects
-  or flags anything it got wrong.
+- **Phase 2 — nightly batch jobs**: **triage** classifies every lead's SMS
+  *and* phone-call activity since the last run and updates the CRM — the
+  only place call transcripts ever get processed, since phase 1's live agent
+  only handles SMS. **QC** is an independent second pass that checks
+  triage's work against the raw conversation and corrects or flags anything
+  it got wrong. **Automated follow-up** proactively nudges leads who've gone
+  quiet, grounded in their actual conversation history.
 
-See [Phase 2: nightly batch jobs](#phase-2-nightly-batch-jobs) below for how
-triage works, and [Roadmap](#roadmap) for what's still to come.
+All three phase-2 jobs are implemented — see
+[Phase 2: nightly batch jobs](#phase-2-nightly-batch-jobs) below for how
+each one works.
 
 Quo (SMS) and Monday.com (CRM) are stubbed behind clean interfaces so the
 whole thing runs locally with no external accounts except Anthropic's. See
@@ -70,6 +72,7 @@ app/
     prompts.py               Shared status definitions (triage + QC must agree)
     triage.py                Nightly triage job (see Phase 2 below)
     qc.py                    Nightly QC job (see Phase 2 below)
+    follow_up.py             Automated follow-up job (see Phase 2 below)
   logging_/
     conversation_log.py      Append-only JSONL conversation logs
     triage_store.py          Latest triage output per lead (JSON)
@@ -78,11 +81,13 @@ scripts/
   send_test_message.py       CLI to POST a fake inbound SMS to the local server
   run_nightly_triage.py      Run nightly triage
   run_nightly_qc.py          Run nightly QC
+  run_follow_up.py           Run automated follow-up
 tests/
   fixtures/                  Scripted test conversations
   test_conversations.py      Phase 1 end-to-end tests (hit the real Claude API)
   test_triage.py             Phase 2 triage end-to-end tests
   test_qc.py                 Phase 2 QC end-to-end tests
+  test_follow_up.py          Phase 2 follow-up end-to-end tests
 data/                        Runtime state — CRM JSON, conversation/triage logs, vector
                               index, stub call transcripts (git-ignored except structure)
 ```
@@ -301,6 +306,49 @@ conversation where the prospect explicitly says they leased elsewhere) and
 confirms QC catches it — this is the test that actually proves QC earns its
 place instead of just rubber-stamping triage.
 
+### Automated follow-up
+
+`python scripts/run_follow_up.py` — sends a proactive nudge to every lead
+who's gone quiet, grounded in what they actually said before (never a
+generic "just checking in").
+
+**Selection is plain code, not the LLM** — the LLM only drafts the message
+once a lead is already selected. A lead is due for a follow-up when:
+
+- its status is one of `new`, `contacted`, `qualified`, `toured`, `applied`,
+  or `unresponsive` (deliberately **excludes** `tour_scheduled` — nudging
+  someone who already has an appointment booked would be a worse experience
+  than no message — and the funnel-terminal statuses `leased`, `lost`,
+  `not_a_lead`), **and**
+- `last_contact_at` is more than `FOLLOW_UP_AFTER_HOURS` (default 48) ago,
+  or was never set.
+
+**This surfaced a real gap while building it**: `Lead.last_contact_at` was
+never actually being *set* anywhere — phase 1's live agent updated specific
+fields via tools but never touched it, so every lead's "last contacted"
+timestamp would have stayed `null` forever and every lead would look
+eternally overdue. Fixed by setting it: in the live agent's `respond` node
+after every SMS exchange ([app/agent/graph.py](app/agent/graph.py)), and
+when triage ingests a call, backdated to when the call actually happened
+(not whenever triage got around to processing it overnight).
+
+After sending, the job sets `last_contact_at = now` and schedules
+`next_follow_up_at`, so re-running immediately doesn't double-send — no
+separate cursor needed, same self-gating pattern as triage/QC.
+
+Run it (against real elapsed time, or force it for testing):
+
+```bash
+python scripts/run_follow_up.py
+python scripts/run_follow_up.py --after-hours 1   # force eligibility for a demo
+```
+
+Test it: `pytest tests/test_follow_up.py -v -s` — covers a stale eligible
+lead getting followed up, a recently-contacted lead being left alone, a
+`leased` lead never getting nudged no matter how stale (the exclusion rule
+matters more than the inclusion rule here), and no double-send on a second
+run.
+
 ### Data model additions for phase 2 (backward compatible)
 
 - `Message.channel: "sms" | "call"` — a lead's conversation log can now hold
@@ -312,15 +360,25 @@ place instead of just rubber-stamping triage.
 - `TriageResult` / `TriageRecord` and `QcFinding` / `QcResult`
   (`app/models/triage.py`) — the structured shapes triage and QC ask Claude
   for, stored via `TriageStore`.
+- `Lead.last_contact_at` is now actually maintained (see above) —
+  previously present in the model but never written to.
 
-## Roadmap
+## Running the whole nightly pipeline
 
-Still to come, without further data model changes:
+The three jobs run in this order — triage needs to run before QC has
+anything to review, and follow-up's `last_contact_at` check benefits from
+triage's call-ingestion having run first:
 
-1. **Automated follow-up** — rule-based selection (plain code, not the LLM)
-   of leads due for a nudge — active status, `last_contact_at` older than
-   `FOLLOW_UP_AFTER_HOURS` — then a Claude-drafted SMS sent via
-   `QuoClient.send_sms`.
+```bash
+python scripts/run_nightly_triage.py
+python scripts/run_nightly_qc.py
+python scripts/run_follow_up.py
+```
+
+A real deployment would wire these up as three separate cron/scheduled-task
+entries (not necessarily back-to-back — QC might run an hour after triage
+to leave room for a human to intervene first) rather than one combined
+script; kept separate here for the same reason.
 
 ## Notes on model choice
 

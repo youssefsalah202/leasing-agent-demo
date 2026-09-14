@@ -50,6 +50,11 @@ def _ingest_new_calls(
                 channel_message_id=call.call_id,
             ),
         )
+        # The call itself is the contact, backdated to when it actually
+        # happened — not "whenever triage got around to processing it" —
+        # since automated follow-up times its nudges off this field.
+        if lead.last_contact_at is None or call.occurred_at > lead.last_contact_at:
+            crm.update_lead(lead.id, last_contact_at=call.occurred_at)
         print(f"[triage] ingested call {call.call_id} for {lead.id}")
 
 

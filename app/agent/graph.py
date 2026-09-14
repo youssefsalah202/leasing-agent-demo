@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, TypedDict
 
 import anthropic
@@ -146,6 +147,10 @@ def build_graph(
 
     def respond(state: AgentState) -> AgentState:
         quo.send_sms(state["phone"], state["outbound_body"])
+        # Automated follow-up (phase 2) times its nudges off this field, so
+        # every real exchange — not just the ones that call a CRM tool —
+        # needs to count as "contact".
+        crm.update_lead(state["lead_id"], last_contact_at=datetime.now(timezone.utc))
         log_store.append_turn(
             lead_id=state["lead_id"],
             inbound_body=state["inbound_body"],
