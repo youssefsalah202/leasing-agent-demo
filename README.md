@@ -196,49 +196,6 @@ Then check the results:
   FAQ sources were used and which tools were called (this is what a future
   nightly QC job would read).
 
-## Deploying a live demo (Render, free tier)
-
-For a standing demo link you can send without your laptop running — as
-opposed to the local browser demo above, which needs your own server up.
-
-**Why Render:** its free web service tier is genuinely free indefinitely
-(no card required to start, per Render's stated policy), unlike Railway,
-whose "free" tier in practice is a one-time trial credit followed by a
-small monthly credit that doesn't really cover an always-available service.
-
-**The trade-off**: free Render services have no persistent disk. Every
-restart (after ~15 min idle, or a redeploy) wipes anything written to disk
-at runtime — so `data/crm_store.json` and the conversation logs reset
-periodically. For a demo link, that's a reasonable trade, arguably even a
-feature (nobody visiting your link sees leftover data from your last demo).
-[`render.yaml`](render.yaml) works around the one part of this that would
-otherwise hurt the experience: it seeds the FAQ vector index at **build**
-time (baked into the deployed image, not written at runtime), so retrieval
-stays instant on every cold start instead of re-downloading the embedding
-model each time.
-
-**Steps** (the account creation and API key entry have to be you — not
-something I can do on your behalf):
-
-1. Push this repo to a GitHub repo you own (ask your assistant to do this
-   part with you if you're not sure how — it just needs a repo URL to push
-   to).
-2. At [render.com](https://render.com), sign up, then **New +** → **Blueprint**
-   → connect the GitHub repo. Render reads `render.yaml` and configures the
-   service automatically.
-3. When prompted for `ANTHROPIC_API_KEY`, paste it directly into Render's
-   dashboard — never share it in chat with your assistant, the same rule as
-   the local `.env` file.
-4. Deploy. First build takes a few minutes (installs dependencies, seeds
-   the FAQ index). Once live, your demo is at
-   `https://<service-name>.onrender.com/demo`.
-
-The nightly batch jobs (triage/QC/follow-up) aren't deployed as scheduled
-jobs on the free tier — they're designed to run via `scripts/run_nightly_*.py`
-on a real cron schedule in production, which is a paid Render feature (or
-any scheduler). For portfolio purposes, demo those locally or in a
-recording rather than expecting them live on the deployed link.
-
 ## Running the tests
 
 ```bash
