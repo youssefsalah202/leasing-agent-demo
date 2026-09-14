@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maple Grove Apartments — Leasing Assistant Demo</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --panel: #ffffff;
+    --border: #e2e5eb;
+    --text: #1c2233;
+    --text-muted: #6b7280;
+    --accent: #2563eb;
+    --accent-text: #ffffff;
+    --bubble-agent: #eef1f6;
+    --bubble-agent-text: #1c2233;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
+    --radius: 14px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    padding: 20px 16px;
+  }
+
+  .app {
+    max-width: 980px;
+    margin: 0 auto;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  header h1 {
+    font-size: 20px;
+    margin: 0 0 2px;
+  }
+
+  header p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  #reset-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #reset-btn:hover { background: #f9fafb; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 720px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  /* Chat panel */
+  .chat-card {
+    display: flex;
+    flex-direction: column;
+    height: min(70vh, 640px);
+  }
+
+  .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .bubble {
+    max-width: 78%;
+    padding: 10px 13px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.42;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .bubble.user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: var(--accent-text);
+    border-bottom-right-radius: 4px;
+  }
+
+  .bubble.agent {
+    align-self: flex-start;
+    background: var(--bubble-agent);
+    color: var(--bubble-agent-text);
+    border-bottom-left-radius: 4px;
+  }
+
+  .bubble.system {
+    align-self: center;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: center;
+    max-width: 90%;
+  }
+
+  .typing {
+    align-self: flex-start;
+    display: flex;
+    gap: 4px;
+    padding: 12px 14px;
+    background: var(--bubble-agent);
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+  }
+  .typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #9aa1b1;
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  .chips {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px 0;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  .chip {
+    background: #f4f6fb;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12.5px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .chip:hover { background: #e9edf7; }
+
+  .input-row {
+    display: flex;
+    gap: 8px;
+    padding: 12px 14px 14px;
+  }
+
+  #msg-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+  }
+  #msg-input:focus { border-color: var(--accent); }
+
+  #send-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #send-btn:disabled { opacity: 0.5; cursor: default; }
+
+  /* CRM panel */
+  .crm-card { padding: 16px; font-size: 13px; }
+  .crm-card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+  }
+  .crm-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid #f0f1f5;
+  }
+  .crm-row:last-child { border-bottom: none; }
+  .crm-label { color: var(--text-muted); }
+  .crm-value { text-align: right; font-weight: 500; max-width: 60%; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: white;
+  }
+
+  .review-flag {
+    margin-top: 10px;
+    background: #fff4e5;
+    border: 1px solid #fcd9a8;
+    color: #92400e;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .phone-note {
+    color: var(--text-muted);
+    font-size: 11px;
+    margin-top: 10px;
+  }
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>🏠 Maple Grove Apartments — Leasing Assistant</h1>
+        <p>Live demo of the phase 1 AI SMS agent. Talking directly to the local server — no SMS account needed.</p>
+      </div>
+      <button id="reset-btn" type="button">Start new conversation</button>
+    </header>
+
+    <div class="layout">
+      <div class="card chat-card">
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chips">
+          <button class="chip" data-msg="Hi, do you allow pets?">🐾 Ask about pets</button>
+          <button class="chip" data-msg="Is parking included?">🚗 Ask about parking</button>
+          <button class="chip" data-msg="I'd like to book a tour of a 2 bedroom">📅 Book a tour</button>
+        </div>
+        <div class="input-row">
+          <input id="msg-input" type="text" placeholder="Type a message, like a prospect texting in…" autocomplete="off" />
+          <button id="send-btn" type="button">Send</button>
+        </div>
+      </div>
+
+      <div class="card crm-card">
+        <h2>CRM Record (live)</h2>
+        <div id="crm-fields"></div>
+        <div id="review-flag"></div>
+        <div class="phone-note" id="phone-note"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const chatLog = document.getElementById("chat-log");
+  const input = document.getElementById("msg-input");
+  const sendBtn = document.getElementById("send-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const crmFields = document.getElementById("crm-fields");
+  const reviewFlag = document.getElementById("review-flag");
+  const phoneNote = document.getElementById("phone-note");
+
+  const STATUS_COLORS = {
+    new: "#6b7280",
+    contacted: "#2563eb",
+    qualified: "#16a34a",
+    tour_scheduled: "#7c3aed",
+    toured: "#0891b2",
+    applied: "#0d9488",
+    leased: "#a16207",
+    lost: "#dc2626",
+    unresponsive: "#ea580c",
+    not_a_lead: "#64748b",
+  };
+
+  function newDemoPhone() {
+    const n = Math.floor(1000000 + Math.random() * 8999999);
+    return "+1555" + n;
+  }
+
+  function getPhone() {
+    let phone = localStorage.getItem("demo_phone");
+    if (!phone) {
+      phone = newDemoPhone();
+      localStorage.setItem("demo_phone", phone);
+    }
+    return phone;
+  }
+
+  let phone = getPhone();
+
+  function addBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "bubble " + role;
+    div.textContent = text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+    return div;
+  }
+
+  function showTyping() {
+    const div = document.createElement("div");
+    div.className = "typing";
+    div.id = "typing-indicator";
+    div.innerHTML = "<span></span><span></span><span></span>";
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  function hideTyping() {
+    const el = document.getElementById("typing-indicator");
+    if (el) el.remove();
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    try {
+      return new Date(iso).toLocaleString(undefined, {
+        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+      });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  function renderLead(lead) {
+    const status = lead.status || "new";
+    const color = STATUS_COLORS[status] || "#6b7280";
+    const tour = lead.tour
+      ? `${lead.tour.property_name}${lead.tour.unit ? " (" + lead.tour.unit + ")" : ""} — ${fmtDate(lead.tour.scheduled_for)}`
+      : "None yet";
+
+    crmFields.innerHTML = `
+      <div class="crm-row"><span class="crm-label">Phone</span><span class="crm-value">${lead.phone || phone}</span></div>
+      <div class="crm-row"><span class="crm-label">Name</span><span class="crm-value">${lead.name || "—"}</span></div>
+      <div class="crm-row"><span class="crm-label">Status</span><span class="crm-value"><span class="badge" style="background:${color}">${status}</span></span></div>
+      <div class="crm-row"><span class="crm-label">Unit interest</span><span class="crm-value">${lead.unit_interest || "—"}</span></div>
+      <div class="crm-row"><span class="crm-label">Tour</span><span class="crm-value">${tour}</span></div>
+      <div class="crm-row"><span class="crm-label">Last contact</span><span class="crm-value">${fmtDate(lead.last_contact_at)}</span></div>
+    `;
+
+    if (lead.needs_review) {
+      const notes = (lead.review_notes || []).slice(-2).join(" · ");
+      reviewFlag.innerHTML = `<div class="review-flag">⚑ Flagged for review by nightly QC${notes ? ": " + notes : ""}</div>`;
+    } else {
+      reviewFlag.innerHTML = "";
+    }
+  }
+
+  async function refreshLead() {
+    try {
+      const res = await fetch(`/demo/lead/${encodeURIComponent(phone)}`);
+      if (res.ok) renderLead(await res.json());
+    } catch (e) {
+      // demo panel is best-effort; chat errors are surfaced separately
+    }
+  }
+
+  async function loadHistory() {
+    try {
+      const res = await fetch(`/demo/history/${encodeURIComponent(phone)}`);
+      if (!res.ok) return;
+      const messages = await res.json();
+      chatLog.innerHTML = "";
+      if (messages.length === 0) {
+        addBubble("system", "Send a message below to start the conversation.");
+      }
+      for (const m of messages) {
+        addBubble(m.direction === "inbound" ? "user" : "agent", m.body);
+      }
+    } catch (e) {
+      addBubble("system", "Couldn't load conversation history — the server may not be running.");
+    }
+  }
+
+  async function sendMessage(text) {
+    text = text.trim();
+    if (!text) return;
+    addBubble("user", text);
+    input.value = "";
+    sendBtn.disabled = true;
+    showTyping();
+
+    try {
+      const res = await fetch("/demo/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, body: text }),
+      });
+      hideTyping();
+      if (!res.ok) throw new Error("Server error " + res.status);
+      const data = await res.json();
+      addBubble("agent", data.reply || "(no reply)");
+      refreshLead();
+    } catch (e) {
+      hideTyping();
+      addBubble("system", "Couldn't reach the demo server. Is it running on this address? (" + e.message + ")");
+    } finally {
+      sendBtn.disabled = false;
+      input.focus();
+    }
+  }
+
+  sendBtn.addEventListener("click", () => sendMessage(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") sendMessage(input.value);
+  });
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => sendMessage(chip.dataset.msg));
+  });
+  resetBtn.addEventListener("click", () => {
+    phone = newDemoPhone();
+    localStorage.setItem("demo_phone", phone);
+    chatLog.innerHTML = "";
+    crmFields.innerHTML = "";
+    reviewFlag.innerHTML = "";
+    phoneNote.textContent = "Demo phone: " + phone;
+    addBubble("system", "New conversation started.");
+    refreshLead();
+  });
+
+  phoneNote.textContent = "Demo phone: " + phone;
+  loadHistory();
+  refreshLead();
+  input.focus();
+})();
+</script>
+</body>
+</html>

@@ -16,7 +16,8 @@ A working demo of an AI leasing assistant system, built in two phases:
 
 All three phase-2 jobs are implemented — see
 [Phase 2: nightly batch jobs](#phase-2-nightly-batch-jobs) below for how
-each one works.
+each one works. There's also a [browser chat demo](#browser-chat-demo-easiest-way-to-show-someone)
+if you just want to see phase 1 working without touching a terminal.
 
 Quo (SMS) and Monday.com (CRM) are stubbed behind clean interfaces so the
 whole thing runs locally with no external accounts except Anthropic's. See
@@ -76,6 +77,9 @@ app/
   logging_/
     conversation_log.py      Append-only JSONL conversation logs
     triage_store.py          Latest triage output per lead (JSON)
+  demo/
+    api.py                   Demo-only routes behind the browser chat widget
+    static/chat.html          The widget itself (vanilla HTML/CSS/JS, no build step)
 scripts/
   seed_faq_index.py          Rebuild the FAQ vector index manually
   send_test_message.py       CLI to POST a fake inbound SMS to the local server
@@ -136,6 +140,29 @@ uvicorn app.main:app --reload --port 8000
 On first startup it seeds the FAQ vector index (`app/rag/docs/*.md` →
 `data/chroma/`) — the first run also downloads a small embedding model
 (~80MB, one-time, needs internet access).
+
+### Browser chat demo (easiest way to show someone)
+
+Open **http://127.0.0.1:8000/demo** in a browser while the server is
+running. It's a small chat widget — type a message like a prospect texting
+in, and a "CRM Record" panel next to the chat updates live as the agent
+responds, books a tour, etc. No terminal, Python, or SMS account needed for
+whoever you're showing it to; only the server needs to be running (on your
+machine, or wherever you deploy it).
+
+It talks to two small demo-only endpoints (`app/demo/api.py`) — not the
+real `/webhooks/quo/sms` route. That's deliberate: a real Quo webhook is
+fire-and-forget (the reply goes out later via a separate outbound SMS
+call), so it has nothing to hand back in its HTTP response. The demo
+endpoints exist purely so a browser can show the reply inline without
+polling — mixing that convenience into the real webhook would make its
+contract dishonest about how Quo actually works.
+
+Each browser tab gets its own demo phone number (stored in
+`localStorage`), so refreshing the page keeps the same conversation, and
+"Start new conversation" begins a fresh lead.
+
+### Or drive it from the command line
 
 In another terminal, send a fake inbound SMS:
 
