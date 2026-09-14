@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from pydantic import BaseModel
+
+from app.models.conversation import CallTranscript
 
 
 class InboundMessage(BaseModel):
@@ -22,3 +25,8 @@ class QuoClient(Protocol):
 
     def parse_inbound_webhook(self, payload: dict) -> InboundMessage:
         """Turn a raw Quo webhook payload into a normalized InboundMessage."""
+
+    def fetch_call_transcripts(self, since: datetime) -> list[CallTranscript]:
+        """Fetch transcribed calls that occurred at or after `since`. Used by
+        the nightly triage job — calls have no live handler like SMS does,
+        so this is the only place call content ever reaches the system."""

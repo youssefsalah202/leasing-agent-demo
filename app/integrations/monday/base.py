@@ -15,3 +15,9 @@ class CrmClient(Protocol):
     def update_lead(self, lead_id: str, **fields) -> Lead: ...
 
     def book_tour(self, lead_id: str, slot: TourSlot) -> Lead: ...
+
+    def list_leads(self) -> list[Lead]:
+        """All leads on the board — used by the nightly batch jobs to find
+        who needs triage/follow-up. A real Monday.com client would page
+        through board items."""
+        ...

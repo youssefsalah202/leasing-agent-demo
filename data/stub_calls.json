@@ -1,0 +1,14 @@
+[
+  {
+    "lead_phone": "+15552223333",
+    "call_id": "call_001",
+    "hours_ago": 3,
+    "transcript": "Agent: Thanks for calling Maple Grove Apartments, this is Sam. How can I help?\nCaller: Hi, I'm relocating for work next month and I'm looking at 2 bedroom places. My name's Priya. What's the rent range on a 2 bedroom?\nAgent: Our 2 bedrooms start around 2200 a month depending on floor and view. Are you looking to move in a specific week?\nCaller: Ideally the first week of October. Also do you have a gym on site?\nAgent: Yes, 24-hour fitness center. I can have someone text you the floor plans if that's easier.\nCaller: That would be great, this is my cell number."
+  },
+  {
+    "lead_phone": "+15554445566",
+    "call_id": "call_002",
+    "hours_ago": 6,
+    "transcript": "Agent: Maple Grove Apartments, how can I help you?\nCaller: Yeah is this a recording? I keep getting calls about my car's extended warranty.\nAgent: No sir, this is Maple Grove Apartments leasing office.\nCaller: Oh, wrong number, sorry.\nAgent: No problem, have a good day."
+  }
+]

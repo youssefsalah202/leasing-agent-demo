@@ -19,6 +19,12 @@ class ConversationLogStore:
         safe_id = lead_id.replace("/", "_")
         return self._base_dir / f"{safe_id}.jsonl"
 
+    def list_lead_ids(self) -> list[str]:
+        """All leads that have a conversation log on disk. File names are
+        the sanitized lead_id, which for phone numbers ("+1555...") is
+        reversible since '/' is the only character we ever replace."""
+        return [p.stem for p in self._base_dir.glob("*.jsonl")]
+
     def load(self, lead_id: str) -> ConversationLog:
         path = self._path(lead_id)
         log = ConversationLog(lead_id=lead_id)
@@ -28,6 +34,11 @@ class ConversationLogStore:
                     log.messages.append(Message.model_validate_json(line))
         return log
 
+    def append_message(self, lead_id: str, message: Message) -> None:
+        path = self._path(lead_id)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(message.model_dump_json() + "\n")
+
     def append_turn(
         self,
         lead_id: str,
@@ -35,10 +46,6 @@ class ConversationLogStore:
         outbound_body: str,
         ai_meta: dict[str, Any] | None = None,
     ) -> None:
-        path = self._path(lead_id)
-        inbound = Message(direction="inbound", body=inbound_body)
-        outbound = Message(direction="outbound", body=outbound_body, ai_meta=ai_meta)
-        with path.open("a", encoding="utf-8") as f:
-            f.write(inbound.model_dump_json() + "\n")
-            f.write(outbound.model_dump_json() + "\n")
+        self.append_message(lead_id, Message(direction="inbound", body=inbound_body))
+        self.append_message(lead_id, Message(direction="outbound", body=outbound_body, ai_meta=ai_meta))
         print(f"[ConversationLogStore] logged turn for {lead_id}")

@@ -11,7 +11,7 @@ from app.rag.store import DOCS_DIR, FaqStore
 
 settings = get_settings()
 
-quo_client = StubQuoClient()
+quo_client = StubQuoClient(settings.stub_calls_path)
 crm_client = StubCrmClient(settings.crm_store_path)
 faq_store = FaqStore(settings.chroma_persist_dir)
 log_store = ConversationLogStore(settings.conversations_dir)

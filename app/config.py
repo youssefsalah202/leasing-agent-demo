@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     conversations_dir: str = "data/conversations"
     chroma_persist_dir: str = "data/chroma"
 
+    # Phase 2 — nightly batch jobs
+    triage_store_dir: str = "data/triage"
+    batch_state_path: str = "data/batch_state.json"
+    stub_calls_path: str = "data/stub_calls.json"
+    follow_up_after_hours: int = 48
+
     # Stubbed for phase 1 — not read by anything yet.
     quo_api_key: str = ""
     quo_webhook_secret: str = ""

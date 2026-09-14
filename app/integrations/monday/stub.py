@@ -60,3 +60,8 @@ class StubCrmClient:
 
     def book_tour(self, lead_id: str, slot: TourSlot) -> Lead:
         return self.update_lead(lead_id, tour=slot, status=LeadStatus.TOUR_SCHEDULED)
+
+    def list_leads(self) -> list[Lead]:
+        with self._lock:
+            data = self._read()
+            return [Lead.model_validate(v) for v in data.values()]

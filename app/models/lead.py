@@ -41,4 +41,8 @@ class Lead(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_contact_at: datetime | None = None
-    next_follow_up_at: datetime | None = None  # unused until phase 2
+    next_follow_up_at: datetime | None = None
+    # Set by the nightly QC job when it disagrees with (or isn't confident
+    # about) triage's classification — a human should look before it's acted on.
+    needs_review: bool = False
+    review_notes: list[str] = Field(default_factory=list)

@@ -1,10 +1,18 @@
-# Leasing SMS Agent — Phase 1 Demo
+# Leasing SMS Agent Demo
 
-A working demo of a live SMS leasing assistant: it receives an inbound text,
-looks up the prospect in a CRM, answers housing questions grounded in a small
-FAQ knowledge base (RAG), and can book a property tour — writing the booking
-back to the CRM and replying over SMS. This is **phase 1** of a larger system;
-see [Roadmap](#roadmap--phase-2) below for what comes next.
+A working demo of an AI leasing assistant system, built in two phases:
+
+- **Phase 1 — live SMS agent**: receives an inbound text, looks up the
+  prospect in a CRM, answers housing questions grounded in a small FAQ
+  knowledge base (RAG), and can book a property tour — writing the booking
+  back to the CRM and replying over SMS.
+- **Phase 2 — nightly triage** (QC and automated follow-up next): classifies
+  every lead's SMS *and* phone-call activity since the last run and updates
+  the CRM — the only place call transcripts ever get processed, since phase
+  1's live agent only handles SMS.
+
+See [Phase 2: nightly batch jobs](#phase-2-nightly-batch-jobs) below for how
+triage works, and [Roadmap](#roadmap) for what's still to come.
 
 Quo (SMS) and Monday.com (CRM) are stubbed behind clean interfaces so the
 whole thing runs locally with no external accounts except Anthropic's. See
@@ -43,7 +51,8 @@ app/
   config.py                  Settings (env vars / .env)
   models/
     lead.py                  Lead, LeadStatus, TourSlot
-    conversation.py          ConversationLog, Message
+    conversation.py          ConversationLog, Message, CallTranscript
+    triage.py                TriageResult, TriageRecord
   integrations/
     quo/        base.py      QuoClient interface   stub.py   StubQuoClient
     monday/     base.py      CrmClient interface    stub.py   StubCrmClient (JSON-backed)
@@ -54,16 +63,22 @@ app/
     graph.py                 The LangGraph agent (see diagram above)
     tools.py                 book_tour / update_crm_field tool defs + execution
     prompts.py                System prompt construction
+  batch/
+    state.py                 Last-run cursor for nightly jobs
+    triage.py                Nightly triage job (see Phase 2 below)
   logging_/
     conversation_log.py      Append-only JSONL conversation logs
+    triage_store.py          Latest triage output per lead (JSON)
 scripts/
   seed_faq_index.py          Rebuild the FAQ vector index manually
   send_test_message.py       CLI to POST a fake inbound SMS to the local server
+  run_nightly_triage.py      Run nightly triage
 tests/
   fixtures/                  Scripted test conversations
-  test_conversations.py      End-to-end tests (hit the real Claude API)
-data/                        Runtime state — CRM JSON, conversation logs, vector index
-                              (git-ignored except this structure)
+  test_conversations.py      Phase 1 end-to-end tests (hit the real Claude API)
+  test_triage.py             Phase 2 triage end-to-end tests
+data/                        Runtime state — CRM JSON, conversation/triage logs, vector
+                              index, stub call transcripts (git-ignored except structure)
 ```
 
 ## Setup
@@ -166,32 +181,86 @@ folder.
 | Integration | Status | What real integration would need |
 |---|---|---|
 | **Claude API** | ✅ Live | `ANTHROPIC_API_KEY` (required — this is the only thing the demo needs from you) |
-| **Quo** (SMS) | 🔶 Stubbed (`app/integrations/quo/stub.py`) | Real webhook payload shape (ours is a documented guess — see the docstring), `QUO_API_KEY`, an outbound-send API call |
+| **Quo** (SMS + calls) | 🔶 Stubbed (`app/integrations/quo/stub.py`) | Real webhook payload shape (ours is a documented guess — see the docstring), `QUO_API_KEY`, an outbound-send API call, and a real call-transcript source for `fetch_call_transcripts` (we assume calls arrive already transcribed to text — see `data/stub_calls.json`) |
 | **Monday.com** (CRM) | 🔶 Stubbed (`app/integrations/monday/stub.py`) | `MONDAY_API_TOKEN`, board/column IDs (`MONDAY_BOARD_ID`), GraphQL mutations mapped to `CrmClient`'s three methods |
 
 Both stubs sit behind a `Protocol` interface (`QuoClient`, `CrmClient`) — swap
 in a real implementation and nothing else in the app changes, since
 `app/main.py` and `app/agent/graph.py` only ever depend on the interface.
 
-## Roadmap / Phase 2
+## Phase 2: nightly batch jobs
 
-Phase 1 deliberately keeps the data model ready for what's next:
+### Nightly triage
 
-- **`Lead`** already carries `status` (a full lifecycle enum, not just
-  free text), `next_follow_up_at` (unused for now), and everything a CRM
-  board column would need.
-- **`ConversationLog`** already logs `ai_meta` per turn — which FAQ sources
-  were used, which tools fired — exactly what a nightly QC pass would need
-  to check the agent's work without re-deriving it.
+`python scripts/run_nightly_triage.py` — classifies every lead with new
+conversation activity (SMS or call) since the job's last run, and writes the
+classification to the CRM.
 
-Phase 2 adds, without changing this data model:
+**Why re-classify SMS the live agent already handled in real time?** Two
+reasons: (1) phone calls have no live handler at all — a call never goes
+through the SMS agent, so triage is the *only* place call content is ever
+processed; (2) it's an unhurried second pass over the *full* conversation
+with no latency budget, so it can catch things the live agent's inline
+tool-calling might miss.
 
-1. **Nightly prospect triage** — classify new conversations, update lead
-   status in the CRM.
-2. **Nightly QC** — review triage output against raw conversations for
-   errors or missed info.
-3. **Automated follow-up** — message prospects based on status/history/time
-   since contact.
+How it works:
+
+1. Pulls new call transcripts from `QuoClient.fetch_call_transcripts()` and
+   appends them into each lead's conversation log as `channel="call"`
+   messages — after this, calls and SMS are one uniform timeline.
+2. For every lead with a message timestamped since the job's last run,
+   builds the full transcript and asks Claude for a structured
+   `TriageResult` (status, name, unit interest, a summary, a confidence
+   score) via `client.messages.parse()`.
+3. Writes the result onto the `Lead` in the CRM, and saves the full
+   `TriageResult` to `data/triage/<lead_id>.json` — kept separate from the
+   raw conversation log so the (upcoming) QC job can compare "what triage
+   concluded" against "what was actually said."
+
+Run it:
+
+```bash
+python scripts/run_nightly_triage.py
+```
+
+It remembers the last time it ran (`data/batch_state.json`) so re-running it
+only processes new activity. To force a specific lookback window instead
+(useful for testing), use `--since-hours`:
+
+```bash
+python scripts/run_nightly_triage.py --since-hours 24
+```
+
+Try it against the two sample calls in `data/stub_calls.json` — a genuine
+prospect (asks about a 2BR, gives her name) and a wrong-number call. Triage
+correctly classifies the wrong number as `status: lost` rather than
+inventing a plausible-looking lead out of it — worth checking after any
+prompt change, since it's the easy way for a triage prompt to go wrong.
+
+Test it: `pytest tests/test_triage.py -v -s` (same live-API pattern as
+phase 1's tests).
+
+### Data model additions for phase 2 (backward compatible)
+
+- `Message.channel: "sms" | "call"` — a lead's conversation log can now hold
+  both SMS turns and call transcripts on one timeline.
+- `Lead.needs_review` / `Lead.review_notes` — where the (upcoming) QC job
+  flags a triage classification it disagrees with, for a human to check.
+- `TriageResult` / `TriageRecord` (`app/models/triage.py`) — the structured
+  shape triage asks Claude for, stored via `TriageStore`.
+
+## Roadmap
+
+Still to come, without further data model changes:
+
+1. **Nightly QC** — an independent LLM pass that re-reads each raw
+   conversation *and* triage's output, checks them against each other, and
+   either corrects low-severity misses or sets `Lead.needs_review` for
+   anything ambiguous.
+2. **Automated follow-up** — rule-based selection (plain code, not the LLM)
+   of leads due for a nudge — active status, `last_contact_at` older than
+   `FOLLOW_UP_AFTER_HOURS` — then a Claude-drafted SMS sent via
+   `QuoClient.send_sms`.
 
 ## Notes on model choice
 
