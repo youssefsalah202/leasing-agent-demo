@@ -59,4 +59,4 @@ def test_triage_recognizes_a_wrong_number_call_as_not_a_lead(env):
     run(env["settings"], env["crm"], env["quo"], env["log_store"], env["triage_store"], since)
 
     lead = env["crm"].get_or_create_lead("+15554445566")
-    assert lead.status == LeadStatus.LOST
+    assert lead.status == LeadStatus.NOT_A_LEAD

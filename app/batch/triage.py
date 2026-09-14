@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import anthropic
 
+from app.batch.prompts import LEAD_STATUS_GUIDE
 from app.config import Settings
 from app.integrations.monday.base import CrmClient
 from app.integrations.quo.base import QuoClient
@@ -16,10 +17,7 @@ TRIAGE_SYSTEM_PROMPT = (
     "You are triaging leasing-office conversations for Maple Grove Apartments. "
     "Given a transcript (SMS and/or a phone call), classify the prospect's "
     "current status, extract their name and unit interest if mentioned, and "
-    "write a short summary. If the conversation clearly isn't a real leasing "
-    "prospect (wrong number, spam, unrelated), use status 'lost' and say so "
-    "in the summary with low confidence — don't guess a plausible-sounding "
-    "lead out of a wrong-number call."
+    "write a short summary.\n\n" + LEAD_STATUS_GUIDE
 )
 
 

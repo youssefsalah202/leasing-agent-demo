@@ -16,6 +16,11 @@ class LeadStatus(str, Enum):
     LEASED = "leased"
     LOST = "lost"
     UNRESPONSIVE = "unresponsive"
+    # Distinct from LOST: this was never a genuine leasing prospect at all
+    # (wrong number, spam, unrelated call/text) — added after the nightly QC
+    # job independently flagged, twice, that forcing these into "lost"
+    # mischaracterizes them as a prospect who dropped out of the funnel.
+    NOT_A_LEAD = "not_a_lead"
 
 
 class TourSlot(BaseModel):

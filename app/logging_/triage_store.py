@@ -18,6 +18,9 @@ class TriageStore:
         safe_id = lead_id.replace("/", "_")
         return self._base_dir / f"{safe_id}.json"
 
+    def list_lead_ids(self) -> list[str]:
+        return [p.stem for p in self._base_dir.glob("*.json")]
+
     def save(self, record: TriageRecord) -> None:
         self._path(record.lead_id).write_text(record.model_dump_json(indent=2), encoding="utf-8")
 

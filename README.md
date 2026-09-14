@@ -6,10 +6,12 @@ A working demo of an AI leasing assistant system, built in two phases:
   prospect in a CRM, answers housing questions grounded in a small FAQ
   knowledge base (RAG), and can book a property tour — writing the booking
   back to the CRM and replying over SMS.
-- **Phase 2 — nightly triage** (QC and automated follow-up next): classifies
-  every lead's SMS *and* phone-call activity since the last run and updates
-  the CRM — the only place call transcripts ever get processed, since phase
-  1's live agent only handles SMS.
+- **Phase 2 — nightly triage & QC** (automated follow-up next): triage
+  classifies every lead's SMS *and* phone-call activity since the last run
+  and updates the CRM — the only place call transcripts ever get processed,
+  since phase 1's live agent only handles SMS. QC is an independent second
+  pass that checks triage's work against the raw conversation and corrects
+  or flags anything it got wrong.
 
 See [Phase 2: nightly batch jobs](#phase-2-nightly-batch-jobs) below for how
 triage works, and [Roadmap](#roadmap) for what's still to come.
@@ -65,7 +67,9 @@ app/
     prompts.py                System prompt construction
   batch/
     state.py                 Last-run cursor for nightly jobs
+    prompts.py               Shared status definitions (triage + QC must agree)
     triage.py                Nightly triage job (see Phase 2 below)
+    qc.py                    Nightly QC job (see Phase 2 below)
   logging_/
     conversation_log.py      Append-only JSONL conversation logs
     triage_store.py          Latest triage output per lead (JSON)
@@ -73,10 +77,12 @@ scripts/
   seed_faq_index.py          Rebuild the FAQ vector index manually
   send_test_message.py       CLI to POST a fake inbound SMS to the local server
   run_nightly_triage.py      Run nightly triage
+  run_nightly_qc.py          Run nightly QC
 tests/
   fixtures/                  Scripted test conversations
   test_conversations.py      Phase 1 end-to-end tests (hit the real Claude API)
   test_triage.py             Phase 2 triage end-to-end tests
+  test_qc.py                 Phase 2 QC end-to-end tests
 data/                        Runtime state — CRM JSON, conversation/triage logs, vector
                               index, stub call transcripts (git-ignored except structure)
 ```
@@ -233,31 +239,85 @@ python scripts/run_nightly_triage.py --since-hours 24
 
 Try it against the two sample calls in `data/stub_calls.json` — a genuine
 prospect (asks about a 2BR, gives her name) and a wrong-number call. Triage
-correctly classifies the wrong number as `status: lost` rather than
+correctly classifies the wrong number as `status: not_a_lead` rather than
 inventing a plausible-looking lead out of it — worth checking after any
 prompt change, since it's the easy way for a triage prompt to go wrong.
+(`not_a_lead` is distinct from `lost`, which means a genuine prospect who
+didn't convert — see [Data model additions](#data-model-additions-for-phase-2-backward-compatible).)
 
 Test it: `pytest tests/test_triage.py -v -s` (same live-API pattern as
 phase 1's tests).
+
+### Nightly QC
+
+`python scripts/run_nightly_qc.py` — an independent LLM pass that re-reads
+each raw conversation *and* triage's classification of it, and checks them
+against each other.
+
+**Scope matters here more than it looks.** QC's job is strictly "is this
+classification accurate," not "what should happen to this lead next" — an
+early version flagged perfectly-correct triage results as `needs_review`
+just because no tour had been booked yet, which is normal for a fresh lead,
+not a triage error. That's the (not-yet-built) follow-up job's territory.
+The system prompt in `app/batch/qc.py` is explicit about this boundary.
+
+QC also caught a real gap in the status taxonomy itself: it independently
+flagged, twice, that forcing a wrong-number call into `status: lost`
+mischaracterizes it as a prospect who dropped out of the funnel. That led to
+adding `LeadStatus.NOT_A_LEAD` and a shared status-definitions block
+(`app/batch/prompts.py`) that both triage and QC reference — before that,
+triage and QC could "disagree" purely over ambiguous status semantics
+(e.g. contacted vs. qualified) rather than an actual classification error,
+which is noise, not signal.
+
+How it works:
+
+1. Reviews every `TriageRecord` with `qc_reviewed_at` still `None` (a fresh
+   triage run always resets this, so a reclassified lead gets re-reviewed
+   automatically — no separate cursor needed for QC).
+2. Asks Claude for a structured `QcResult`: does it agree with triage's
+   status, a confidence score, reasoning, and a list of findings (severity +
+   issue + suggested fix).
+3. Three outcomes, based on the result:
+   - **Agrees** → nothing changes on the lead (an `info`-level finding, if
+     any, just gets appended to `Lead.notes` as an FYI).
+   - **Disagrees, confidently** (≥ 0.8 confidence) → auto-corrects
+     `Lead.status`, with the reasoning logged to `Lead.notes`.
+   - **Disagrees, not confidently — or raises a `warning`/`error` finding**
+     → sets `Lead.needs_review = True` and appends to `Lead.review_notes`
+     for a human to check, rather than silently guessing.
+
+Run it after triage has produced some records:
+
+```bash
+python scripts/run_nightly_triage.py
+python scripts/run_nightly_qc.py
+```
+
+Test it: `pytest tests/test_qc.py -v -s` — one test confirms QC doesn't flag
+correctly-triaged leads (the "don't cry wolf" case); the other seeds a
+*deliberately wrong* triage result (status `qualified` against a
+conversation where the prospect explicitly says they leased elsewhere) and
+confirms QC catches it — this is the test that actually proves QC earns its
+place instead of just rubber-stamping triage.
 
 ### Data model additions for phase 2 (backward compatible)
 
 - `Message.channel: "sms" | "call"` — a lead's conversation log can now hold
   both SMS turns and call transcripts on one timeline.
-- `Lead.needs_review` / `Lead.review_notes` — where the (upcoming) QC job
-  flags a triage classification it disagrees with, for a human to check.
-- `TriageResult` / `TriageRecord` (`app/models/triage.py`) — the structured
-  shape triage asks Claude for, stored via `TriageStore`.
+- `Lead.needs_review` / `Lead.review_notes` — where QC flags a triage
+  classification it disagrees with, for a human to check.
+- `LeadStatus.NOT_A_LEAD` — wrong number/spam/unrelated contact, distinct
+  from `LOST` (a genuine prospect who didn't convert).
+- `TriageResult` / `TriageRecord` and `QcFinding` / `QcResult`
+  (`app/models/triage.py`) — the structured shapes triage and QC ask Claude
+  for, stored via `TriageStore`.
 
 ## Roadmap
 
 Still to come, without further data model changes:
 
-1. **Nightly QC** — an independent LLM pass that re-reads each raw
-   conversation *and* triage's output, checks them against each other, and
-   either corrects low-severity misses or sets `Lead.needs_review` for
-   anything ambiguous.
-2. **Automated follow-up** — rule-based selection (plain code, not the LLM)
+1. **Automated follow-up** — rule-based selection (plain code, not the LLM)
    of leads due for a nudge — active status, `last_contact_at` older than
    `FOLLOW_UP_AFTER_HOURS` — then a Claude-drafted SMS sent via
    `QuoClient.send_sms`.
