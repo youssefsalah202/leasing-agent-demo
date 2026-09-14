@@ -1,0 +1,6 @@
+{
+  "phone": "+15550001111",
+  "turns": [
+    { "inbound": "Hi! Does the building allow pets and is parking included?" }
+  ]
+}

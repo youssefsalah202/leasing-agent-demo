@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Runtime-generated demo data (recreated automatically on first run)
+data/crm_store.json
+data/chroma/
+data/conversations/*.jsonl
