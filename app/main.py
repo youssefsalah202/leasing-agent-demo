@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from app.agent.graph import build_graph
 from app.config import get_settings
 from app.demo.api import build_demo_router
-from app.integrations.monday.stub import StubCrmClient
+from app.integrations.monday.factory import build_crm_client
 from app.integrations.quo.stub import StubQuoClient
 from app.logging_.conversation_log import ConversationLogStore
 from app.rag.store import DOCS_DIR, FaqStore
@@ -13,7 +13,7 @@ from app.rag.store import DOCS_DIR, FaqStore
 settings = get_settings()
 
 quo_client = StubQuoClient(settings.stub_calls_path)
-crm_client = StubCrmClient(settings.crm_store_path)
+crm_client = build_crm_client(settings)
 faq_store = FaqStore(settings.chroma_persist_dir)
 log_store = ConversationLogStore(settings.conversations_dir)
 
@@ -24,7 +24,7 @@ if not faq_store.is_seeded():
 agent = build_graph(settings, crm_client, quo_client, faq_store, log_store)
 
 app = FastAPI(title="Leasing SMS Agent — Phase 1 demo")
-app.include_router(build_demo_router(agent, crm_client, log_store))
+app.include_router(build_demo_router(agent, crm_client, log_store, crm_backend=settings.crm_backend))
 
 
 @app.post("/webhooks/quo/sms")

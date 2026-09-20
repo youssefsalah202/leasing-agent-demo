@@ -8,9 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Central config. Reads from environment variables / a .env file.
 
-    Only ANTHROPIC_API_KEY is required for phase 1 — Quo and Monday are
-    stubbed, so their settings exist here as placeholders for when we wire
-    up the real integrations.
+    Only ANTHROPIC_API_KEY is required — the CRM defaults to the local JSON
+    stub (set CRM_BACKEND=monday for the real board) and Quo is still stubbed,
+    so its settings are placeholders for when we wire up the real integration.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -28,11 +28,15 @@ class Settings(BaseSettings):
     stub_calls_path: str = "data/stub_calls.json"
     follow_up_after_hours: int = 48
 
-    # Stubbed for phase 1 — not read by anything yet.
-    quo_api_key: str = ""
-    quo_webhook_secret: str = ""
+    # "stub" (JSON file) or "monday" (the real board — needs the two Monday settings below).
+    crm_backend: str = "stub"
     monday_api_token: str = ""
     monday_board_id: str = ""
+    monday_api_version: str = "2026-07"
+
+    # Still stubbed — not read by anything yet.
+    quo_api_key: str = ""
+    quo_webhook_secret: str = ""
 
 
 @lru_cache

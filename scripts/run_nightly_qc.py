@@ -14,14 +14,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.batch.qc import run
 from app.config import get_settings
-from app.integrations.monday.stub import StubCrmClient
+from app.integrations.monday.factory import build_crm_client
 from app.logging_.conversation_log import ConversationLogStore
 from app.logging_.triage_store import TriageStore
 
 
 def main() -> None:
     settings = get_settings()
-    crm = StubCrmClient(settings.crm_store_path)
+    crm = build_crm_client(settings)
     log_store = ConversationLogStore(settings.conversations_dir)
     triage_store = TriageStore(settings.triage_store_dir)
 

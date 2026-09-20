@@ -19,9 +19,11 @@ All three phase-2 jobs are implemented — see
 each one works. There's also a [browser chat demo](#browser-chat-demo-easiest-way-to-show-someone)
 if you just want to see phase 1 working without touching a terminal.
 
-Quo (SMS) and Monday.com (CRM) are stubbed behind clean interfaces so the
-whole thing runs locally with no external accounts except Anthropic's. See
-[What's stubbed / what needs real credentials](#whats-stubbed--what-needs-real-credentials).
+Quo (SMS) is stubbed and Monday.com (CRM) can run either as a local stub or
+against a **real Monday board**, both behind clean interfaces — so by default
+the whole thing runs locally with no external accounts except Anthropic's. See
+[What's stubbed / what needs real credentials](#whats-stubbed--what-needs-real-credentials)
+and [Using a real Monday.com board](#using-a-real-mondaycom-board).
 
 ## How it works
 
@@ -61,6 +63,7 @@ app/
   integrations/
     quo/        base.py      QuoClient interface   stub.py   StubQuoClient
     monday/     base.py      CrmClient interface    stub.py   StubCrmClient (JSON-backed)
+                client.py    MondayCrmClient (real GraphQL)    factory.py   picks one via CRM_BACKEND
   rag/
     store.py                 Chroma wrapper (seed + retrieve)
     docs/                    Sample FAQ docs (pet policy, parking, amenities, ...)
@@ -83,6 +86,7 @@ app/
 scripts/
   seed_faq_index.py          Rebuild the FAQ vector index manually
   send_test_message.py       CLI to POST a fake inbound SMS to the local server
+  setup_monday_board.py      Create the Monday leads board (or --check it end to end)
   run_nightly_triage.py      Run nightly triage
   run_nightly_qc.py          Run nightly QC
   run_follow_up.py           Run automated follow-up
@@ -92,6 +96,9 @@ tests/
   test_triage.py             Phase 2 triage end-to-end tests
   test_qc.py                 Phase 2 QC end-to-end tests
   test_follow_up.py          Phase 2 follow-up end-to-end tests
+  test_monday_client.py      Real Monday client vs. a fake Monday API (offline)
+  test_demo_api.py           Browser demo routes (offline, fake agent)
+  test_tools.py              CRM tool unit tests (offline)
 data/                        Runtime state — CRM JSON, conversation/triage logs, vector
                               index, stub call transcripts (git-ignored except structure)
 ```
@@ -144,13 +151,26 @@ On first startup it seeds the FAQ vector index (`app/rag/docs/*.md` →
 ### Browser chat demo (easiest way to show someone)
 
 Open **http://127.0.0.1:8000/demo** in a browser while the server is
-running. It's a small chat widget — type a message like a prospect texting
-in, and a "CRM Record" panel next to the chat updates live as the agent
-responds, books a tour, etc. No terminal, Python, or SMS account needed for
-whoever you're showing it to; only the server needs to be running (on your
-machine, or wherever you deploy it).
+running. Type a message like a prospect texting in, or press one of the
+**▶ scenario** buttons (*Pets & parking*, *Book a tour*, *Apply & lease
+terms*) and watch the real agent run the whole conversation by itself. Next to
+the chat:
 
-It talks to two small demo-only endpoints (`app/demo/api.py`) — not the
+- **Lead record** — the CRM row for this prospect with a pipeline stepper
+  (new → contacted → qualified → tour booked → …). Fields flash and a toast
+  appears whenever the agent changes something. A badge says honestly whether
+  the record is a live Monday.com board or the local simulation.
+- **Agent trace** — click any assistant reply to see exactly what produced it:
+  the FAQ passages retrieved, every tool call (`book_tour`,
+  `update_crm_field`) with its arguments and result, and the reply time.
+- Light/dark theme, mobile layout, and a "what runs overnight" explainer.
+
+No terminal, Python, or SMS account is needed for whoever you're showing it
+to; only the server needs to be running (on your machine, or wherever you
+deploy it). Inputs are bounded (phone format, 500-character messages) because
+every message is a Claude call.
+
+It talks to a few small demo-only endpoints (`app/demo/api.py`) — not the
 real `/webhooks/quo/sms` route. That's deliberate: a real Quo webhook is
 fire-and-forget (the reply goes out later via a separate outbound SMS
 call), so it has nothing to hand back in its HTTP response. The demo
@@ -189,7 +209,7 @@ python scripts/send_test_message.py --phone "+15559990000" --body "Thursday at 2
 
 Then check the results:
 
-- **CRM record** (mocked Monday board): `data/crm_store.json` — you'll see
+- **CRM record** (mocked Monday board by default; your real board if `CRM_BACKEND=monday`): `data/crm_store.json` — you'll see
   `status: "tour_scheduled"` and a populated `tour` field.
 - **Conversation log**: `data/conversations/+15559990000.jsonl` — one JSON
   object per message, with `ai_meta` on each outbound turn recording which
@@ -220,11 +240,34 @@ folder.
 |---|---|---|
 | **Claude API** | ✅ Live | `ANTHROPIC_API_KEY` (required — this is the only thing the demo needs from you) |
 | **Quo** (SMS + calls) | 🔶 Stubbed (`app/integrations/quo/stub.py`) | Real webhook payload shape (ours is a documented guess — see the docstring), `QUO_API_KEY`, an outbound-send API call, and a real call-transcript source for `fetch_call_transcripts` (we assume calls arrive already transcribed to text — see `data/stub_calls.json`) |
-| **Monday.com** (CRM) | 🔶 Stubbed (`app/integrations/monday/stub.py`) | `MONDAY_API_TOKEN`, board/column IDs (`MONDAY_BOARD_ID`), GraphQL mutations mapped to `CrmClient`'s three methods |
+| **Monday.com** (CRM) | ✅ Real client available (`app/integrations/monday/client.py`), 🔶 stub by default | Set `CRM_BACKEND=monday`, `MONDAY_API_TOKEN`, `MONDAY_BOARD_ID` — see [below](#using-a-real-mondaycom-board) |
 
-Both stubs sit behind a `Protocol` interface (`QuoClient`, `CrmClient`) — swap
+Both integrations sit behind a `Protocol` interface (`QuoClient`, `CrmClient`) — swap
 in a real implementation and nothing else in the app changes, since
 `app/main.py` and `app/agent/graph.py` only ever depend on the interface.
+
+## Using a real Monday.com board
+
+The free Monday plan is enough (API access is included; ~1,000 calls/day).
+
+1. Get a token: monday.com → your avatar → **Developers** → **My access tokens**.
+2. Put it in `.env`: `MONDAY_API_TOKEN=...`
+3. Create the board (all columns included):
+   ```bash
+   python scripts/setup_monday_board.py
+   ```
+   and copy the printed `MONDAY_BOARD_ID=...` and `CRM_BACKEND=monday` into `.env`.
+4. Check it end to end (creates, updates, reads back and deletes a throwaway lead):
+   ```bash
+   python scripts/setup_monday_board.py --check
+   ```
+
+Every lead is one item on the board; the phone number stays the lead id, so
+conversation logs and triage records keep working. Tour times are stored as
+ISO text so a local time like 3pm isn't shifted to another timezone.
+`tests/test_monday_client.py` covers the client against a fake Monday API (no
+token needed). The nightly scripts and the API use the real board whenever
+`CRM_BACKEND=monday`.
 
 ## Phase 2: nightly batch jobs
 

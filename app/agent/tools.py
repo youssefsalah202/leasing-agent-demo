@@ -83,6 +83,7 @@ def execute_tool(name: str, tool_input: dict[str, Any], crm: CrmClient, lead_id:
                 valid = ", ".join(s.value for s in LeadStatus)
                 raise ValueError(f"{value!r} is not a valid status. Valid values: {valid}") from None
         lead = crm.update_lead(lead_id, **{field: value})
-        return f"Updated {field} to {value!r}."
+        shown = value.value if isinstance(value, LeadStatus) else value
+        return f"Updated {field} to {shown!r}."
 
     raise ValueError(f"Unknown tool: {name}")

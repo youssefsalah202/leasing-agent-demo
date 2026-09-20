@@ -1,462 +1,737 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Maple Grove Apartments — Leasing Assistant Demo</title>
+<title>Maple Grove Leasing Assistant — Live Demo</title>
+<meta name="description" content="Live demo of an AI leasing assistant: it answers prospect texts from a FAQ knowledge base, books tours and updates the CRM." />
+<script>
+  // Apply the saved/preferred theme before first paint to avoid a flash.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("demo_theme"); } catch (e) {}
+    if (!t) t = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <style>
   :root {
-    --bg: #f4f5f7;
+    --bg: #f5f6fb;
+    --bg-grad: radial-gradient(900px 400px at 85% -10%, rgba(99, 102, 241, .10), transparent 60%),
+               radial-gradient(700px 380px at -5% 0%, rgba(20, 184, 166, .09), transparent 60%);
     --panel: #ffffff;
-    --border: #e2e5eb;
-    --text: #1c2233;
-    --text-muted: #6b7280;
-    --accent: #2563eb;
-    --accent-text: #ffffff;
-    --bubble-agent: #eef1f6;
-    --bubble-agent-text: #1c2233;
-    --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
-    --radius: 14px;
+    --panel-2: #f7f8fc;
+    --border: #e4e7f0;
+    --text: #151a2c;
+    --muted: #667085;
+    --accent: #4f46e5;
+    --accent-2: #7c3aed;
+    --accent-soft: rgba(79, 70, 229, .10);
+    --ok: #12a150;
+    --warn: #b45309;
+    --warn-bg: #fff6e6;
+    --err: #d92d20;
+    --err-bg: #fef1f0;
+    --bubble-agent: #eef0f7;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 8px 24px rgba(16, 24, 40, .06);
+    --radius: 18px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  [data-theme="dark"] {
+    --bg: #0a0c14;
+    --bg-grad: radial-gradient(900px 420px at 85% -10%, rgba(99, 102, 241, .20), transparent 60%),
+               radial-gradient(700px 380px at -5% 0%, rgba(20, 184, 166, .12), transparent 60%);
+    --panel: #12151f;
+    --panel-2: #0e111a;
+    --border: #232839;
+    --text: #e8eaf3;
+    --muted: #8b93a7;
+    --accent: #7c83ff;
+    --accent-2: #a78bfa;
+    --accent-soft: rgba(124, 131, 255, .14);
+    --ok: #34d399;
+    --warn: #fbbf24;
+    --warn-bg: rgba(251, 191, 36, .10);
+    --err: #f87171;
+    --err-bg: rgba(248, 113, 113, .10);
+    --bubble-agent: #1a1f2e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 32px rgba(0, 0, 0, .35);
   }
 
   * { box-sizing: border-box; }
-
+  html { color-scheme: light; }
+  html[data-theme="dark"] { color-scheme: dark; }
   body {
     margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     min-height: 100vh;
-    padding: 20px 16px;
-  }
-
-  .app {
-    max-width: 980px;
-    margin: 0 auto;
-  }
-
-  header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 18px;
-    flex-wrap: wrap;
-  }
-
-  header h1 {
-    font-size: 20px;
-    margin: 0 0 2px;
-  }
-
-  header p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  #reset-btn {
-    background: var(--panel);
-    border: 1px solid var(--border);
+    background-color: var(--bg);
+    background-image: var(--bg-grad);
+    background-repeat: no-repeat;
+    background-attachment: fixed;
     color: var(--text);
-    padding: 8px 14px;
-    border-radius: 10px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  #reset-btn:hover { background: #f9fafb; }
+  button, textarea { font-family: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 16px;
-    align-items: start;
-  }
+  .app { max-width: 1180px; margin: 0 auto; padding: 22px 18px 40px; }
 
-  @media (max-width: 720px) {
-    .layout { grid-template-columns: 1fr; }
+  /* ---------- top bar ---------- */
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-weight: 700; letter-spacing: .5px;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, .35);
   }
+  .brand h1 { font-size: 18px; margin: 0; letter-spacing: -.2px; }
+  .brand p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+  .top-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 12px; padding: 6px 11px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted); white-space: nowrap;
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .pill.live { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
+  .pill.live .dot { background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .btn {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 13px; font-size: 13px;
+    transition: background .15s, border-color .15s;
+  }
+  .btn:hover { background: var(--panel-2); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+  .btn.icon { padding: 8px 10px; }
 
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-  }
+  /* ---------- layout ---------- */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 18px; align-items: start; }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
 
-  /* Chat panel */
-  .chat-card {
-    display: flex;
-    flex-direction: column;
-    height: min(70vh, 640px);
+  /* ---------- chat ---------- */
+  .chat { display: flex; flex-direction: column; height: clamp(540px, calc(100vh - 140px), 780px); overflow: hidden; }
+  .chat-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--panel-2); }
+  .avatar {
+    width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 18px;
+    background: linear-gradient(135deg, #14b8a6, var(--accent)); color: #fff;
   }
+  .chat-head .who { font-weight: 600; font-size: 14.5px; }
+  .chat-head .sub { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 1px; }
+  .chat-head .sub .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 
-  .chat-log {
-    flex: 1;
-    overflow-y: auto;
-    padding: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
+  .log { flex: 1; overflow-y: auto; padding: 20px 18px 8px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+  .msg { display: flex; flex-direction: column; max-width: 80%; animation: rise .25s ease-out; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.agent { align-self: flex-start; align-items: flex-start; }
+  .bubble { padding: 10px 14px; border-radius: 18px; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .msg.user .bubble { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-bottom-right-radius: 5px; }
+  .msg.agent .bubble { background: var(--bubble-agent); border-bottom-left-radius: 5px; cursor: pointer; border: 1px solid transparent; transition: border-color .15s; }
+  .msg.agent .bubble:hover { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+  .msg.agent.selected .bubble { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .msg-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; font-size: 11.5px; color: var(--muted); }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-family: var(--mono); }
+  .tag.tool { background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); }
+  .tag.err { background: var(--err-bg); color: var(--err); }
+  .system { align-self: center; text-align: center; color: var(--muted); font-size: 12.5px; max-width: 92%; padding: 6px 12px; }
+  .system.error { color: var(--err); background: var(--err-bg); border-radius: 10px; }
+  .welcome {
+    align-self: center; text-align: center; max-width: 440px; margin: auto; padding: 8px 6px; color: var(--muted); font-size: 13.5px; line-height: 1.55;
   }
+  .welcome .big { font-size: 34px; margin-bottom: 6px; }
+  .welcome strong { color: var(--text); }
 
-  .bubble {
-    max-width: 78%;
-    padding: 10px 13px;
-    border-radius: 16px;
-    font-size: 14px;
-    line-height: 1.42;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
+  .typing { align-self: flex-start; display: flex; gap: 5px; padding: 13px 15px; background: var(--bubble-agent); border-radius: 18px; border-bottom-left-radius: 5px; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: bounce 1.2s infinite ease-in-out; }
+  .typing span:nth-child(2) { animation-delay: .15s; }
+  .typing span:nth-child(3) { animation-delay: .3s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 
-  .bubble.user {
-    align-self: flex-end;
-    background: var(--accent);
-    color: var(--accent-text);
-    border-bottom-right-radius: 4px;
+  .scenarios { padding: 10px 16px 4px; border-top: 1px solid var(--border); }
+  .scen-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .scen {
+    display: inline-flex; align-items: center; gap: 7px; font-size: 13px; padding: 7px 13px; border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); background: var(--accent-soft); color: var(--text);
+    transition: transform .12s, background .15s;
   }
+  .scen:hover:not(:disabled) { transform: translateY(-1px); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .scen[hidden] { display: none; }
+  .scen:disabled { opacity: .5; cursor: default; }
+  .scen.stop { border-color: color-mix(in srgb, var(--err) 45%, var(--border)); background: var(--err-bg); }
+  .chip { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); transition: background .15s; }
+  .chip:hover:not(:disabled) { background: var(--accent-soft); }
+  .chip:disabled { opacity: .5; cursor: default; }
+  .chips { padding: 6px 16px 0; }
 
-  .bubble.agent {
-    align-self: flex-start;
-    background: var(--bubble-agent);
-    color: var(--bubble-agent-text);
-    border-bottom-left-radius: 4px;
+  .composer { display: flex; align-items: flex-end; gap: 8px; padding: 12px 16px 16px; }
+  .composer textarea {
+    flex: 1; resize: none; max-height: 110px; overflow-y: hidden; padding: 11px 14px; font-size: 14.5px; line-height: 1.4;
+    border: 1px solid var(--border); border-radius: 14px; background: var(--panel-2); outline: none; transition: border-color .15s, box-shadow .15s;
   }
+  .composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .send {
+    border: none; border-radius: 14px; width: 46px; height: 44px; display: grid; place-items: center; color: #fff;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); transition: transform .12s, opacity .15s;
+  }
+  .send:hover:not(:disabled) { transform: translateY(-1px); }
+  .send:disabled { opacity: .45; cursor: default; }
+  .hint { padding: 0 18px 12px; font-size: 11.5px; color: var(--muted); margin-top: -6px; }
 
-  .bubble.system {
-    align-self: center;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    text-align: center;
-    max-width: 90%;
-  }
+  /* ---------- side panels ---------- */
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .panel { padding: 18px; }
+  .panel h2 { margin: 0; font-size: 14px; letter-spacing: -.1px; display: flex; align-items: center; gap: 8px; }
+  .panel .sub { font-size: 12px; color: var(--muted); margin: 3px 0 14px; line-height: 1.45; }
 
-  .typing {
-    align-self: flex-start;
-    display: flex;
-    gap: 4px;
-    padding: 12px 14px;
-    background: var(--bubble-agent);
-    border-radius: 16px;
-    border-bottom-left-radius: 4px;
-  }
-  .typing span {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #9aa1b1;
-    animation: bounce 1.2s infinite ease-in-out;
-  }
-  .typing span:nth-child(2) { animation-delay: 0.15s; }
-  .typing span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes bounce {
-    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-    30% { transform: translateY(-4px); opacity: 1; }
-  }
+  .stepper { display: flex; align-items: flex-start; margin: 4px 0 16px; }
+  .step { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; position: relative; text-align: center; min-width: 0; }
+  .step::before { content: ""; position: absolute; top: 8px; left: -50%; right: 50%; height: 2px; background: var(--border); transition: background .4s; }
+  .step:first-child::before { display: none; }
+  .step .node { width: 18px; height: 18px; border-radius: 50%; background: var(--panel); border: 2px solid var(--border); position: relative; z-index: 1; transition: all .35s; }
+  .step .lbl { font-size: 10px; color: var(--muted); line-height: 1.15; transition: color .3s; }
+  .step.done::before, .step.current::before { background: var(--accent); }
+  .step.done .node { background: var(--accent); border-color: var(--accent); }
+  .step.current .node { border-color: var(--accent); background: var(--panel); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .step.current .lbl { color: var(--text); font-weight: 600; }
+  .stepper.off .step .node { opacity: .45; }
+  .offtrack { display: none; margin: -6px 0 14px; padding: 7px 10px; font-size: 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }
+  .offtrack.show { display: block; }
 
-  .chips {
-    display: flex;
-    gap: 8px;
-    padding: 10px 14px 0;
-    flex-wrap: wrap;
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
-  }
+  .fields { display: grid; gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .field { display: flex; justify-content: space-between; gap: 12px; padding: 9px 12px; background: var(--panel); font-size: 13px; }
+  .field .k { color: var(--muted); }
+  .field .v { text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+  .field.changed { animation: flash 1.6s ease-out; }
+  @keyframes flash { 0% { background: color-mix(in srgb, var(--ok) 28%, var(--panel)); } 100% { background: var(--panel); } }
+  .empty-note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .review { margin-top: 10px; padding: 9px 11px; border-radius: 10px; font-size: 12px; background: var(--warn-bg); color: var(--warn); }
 
-  .chip {
-    background: #f4f6fb;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-size: 12.5px;
-    padding: 6px 12px;
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .chip:hover { background: #e9edf7; }
+  .trace { display: grid; gap: 0; }
+  .t-step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding-bottom: 14px; position: relative; animation: rise .3s ease-out both; }
+  .t-step:not(:last-child)::before { content: ""; position: absolute; left: 13px; top: 28px; bottom: 2px; width: 2px; background: var(--border); }
+  .t-ico { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-size: 14px; background: var(--accent-soft); }
+  .t-step.tool .t-ico { background: color-mix(in srgb, var(--ok) 15%, transparent); }
+  .t-step.err .t-ico { background: var(--err-bg); }
+  .t-title { font-size: 13px; font-weight: 600; line-height: 1.3; padding-top: 4px; }
+  .t-body { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+  .code { font-family: var(--mono); font-size: 11.5px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin-top: 6px; color: var(--text); overflow-wrap: anywhere; }
+  .code .ok { color: var(--ok); }
+  .code .bad { color: var(--err); }
+  .trace-empty { font-size: 12.5px; color: var(--muted); padding: 6px 0; line-height: 1.5; }
 
-  .input-row {
-    display: flex;
-    gap: 8px;
-    padding: 12px 14px 14px;
-  }
+  details.night summary { cursor: pointer; font-size: 14px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  details.night summary::-webkit-details-marker { display: none; }
+  details.night summary::after { content: "＋"; color: var(--muted); }
+  details.night[open] summary::after { content: "－"; }
+  .night-list { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  .night-list li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .night-list b { color: var(--text); }
 
-  #msg-input {
-    flex: 1;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 14px;
-    font-family: inherit;
-    outline: none;
+  /* ---------- toasts ---------- */
+  .toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 20; pointer-events: none; }
+  .toast {
+    background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--ok); border-radius: 12px; padding: 10px 14px;
+    font-size: 12.5px; box-shadow: var(--shadow); animation: rise .25s ease-out; max-width: 320px;
   }
-  #msg-input:focus { border-color: var(--accent); }
+  .toast b { color: var(--ok); }
 
-  #send-btn {
-    background: var(--accent);
-    color: white;
-    border: none;
-    border-radius: 10px;
-    padding: 0 18px;
-    font-size: 14px;
-    cursor: pointer;
+  @media (max-width: 560px) {
+    .app { padding: 14px 12px 32px; }
+    .chat { height: max(560px, calc(100dvh - 110px)); }
+    .chips, .hint { display: none; }
+    .msg { max-width: 92%; }
+    .brand p { display: none; }
+    .stepper .lbl { font-size: 8.5px; }
   }
-  #send-btn:disabled { opacity: 0.5; cursor: default; }
-
-  /* CRM panel */
-  .crm-card { padding: 16px; font-size: 13px; }
-  .crm-card h2 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    margin: 0 0 12px;
-  }
-  .crm-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 7px 0;
-    border-bottom: 1px solid #f0f1f5;
-  }
-  .crm-row:last-child { border-bottom: none; }
-  .crm-label { color: var(--text-muted); }
-  .crm-value { text-align: right; font-weight: 500; max-width: 60%; }
-
-  .badge {
-    display: inline-block;
-    padding: 2px 9px;
-    border-radius: 999px;
-    font-size: 11.5px;
-    font-weight: 600;
-    color: white;
-  }
-
-  .review-flag {
-    margin-top: 10px;
-    background: #fff4e5;
-    border: 1px solid #fcd9a8;
-    color: #92400e;
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 12px;
-  }
-
-  .phone-note {
-    color: var(--text-muted);
-    font-size: 11px;
-    margin-top: 10px;
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
   }
 </style>
 </head>
 <body>
-  <div class="app">
-    <header>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="logo">MG</div>
       <div>
-        <h1>🏠 Maple Grove Apartments — Leasing Assistant</h1>
-        <p>Live demo of the phase 1 AI SMS agent — no SMS account or install needed. This is a prototype: conversation data may reset periodically (free hosting tier), so don't expect it to remember past sessions.</p>
-      </div>
-      <button id="reset-btn" type="button">Start new conversation</button>
-    </header>
-
-    <div class="layout">
-      <div class="card chat-card">
-        <div id="chat-log" class="chat-log"></div>
-        <div class="chips">
-          <button class="chip" data-msg="Hi, do you allow pets?">🐾 Ask about pets</button>
-          <button class="chip" data-msg="Is parking included?">🚗 Ask about parking</button>
-          <button class="chip" data-msg="I'd like to book a tour of a 2 bedroom">📅 Book a tour</button>
-        </div>
-        <div class="input-row">
-          <input id="msg-input" type="text" placeholder="Type a message, like a prospect texting in…" autocomplete="off" />
-          <button id="send-btn" type="button">Send</button>
-        </div>
-      </div>
-
-      <div class="card crm-card">
-        <h2>CRM Record (live)</h2>
-        <div id="crm-fields"></div>
-        <div id="review-flag"></div>
-        <div class="phone-note" id="phone-note"></div>
+        <h1>Maple Grove Leasing Assistant</h1>
+        <p>AI SMS agent · try it live, then look behind the scenes</p>
       </div>
     </div>
+    <div class="top-actions">
+      <span id="crm-pill" class="pill"><span class="dot"></span><span id="crm-pill-text">CRM</span></span>
+      <button id="theme-btn" class="btn icon" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">🌓</button>
+      <button id="reset-btn" class="btn" type="button">↺ New conversation</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- ================= CHAT ================= -->
+    <section class="card chat" aria-label="Chat with the leasing assistant">
+      <div class="chat-head">
+        <div class="avatar">🏠</div>
+        <div>
+          <div class="who">Maple Grove Leasing</div>
+          <div class="sub"><span class="dot"></span><span id="you-are">Texting as —</span></div>
+        </div>
+      </div>
+
+      <div id="log" class="log" role="log" aria-live="polite" aria-label="Conversation"></div>
+
+      <div class="scenarios">
+        <div class="scen-label"><span>▶ Watch it work — one click</span></div>
+        <div class="row" id="scen-row"></div>
+      </div>
+      <div class="chips"><div class="row" id="chip-row"></div></div>
+
+      <div class="composer">
+        <textarea id="input" rows="1" maxlength="500" placeholder="Text the assistant…" aria-label="Message"></textarea>
+        <button id="send" class="send" type="button" aria-label="Send message">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4 20-7Z"/></svg>
+        </button>
+      </div>
+      <div class="hint">Enter to send · Shift+Enter for a new line · Click any assistant reply to inspect it →</div>
+    </section>
+
+    <!-- ================= BEHIND THE SCENES ================= -->
+    <aside class="side" aria-label="Behind the scenes">
+      <section class="card panel">
+        <h2>📇 Lead record <span id="rec-source" class="tag"></span></h2>
+        <div class="sub">What the CRM holds about this prospect — it updates as you chat.</div>
+        <div id="stepper" class="stepper" aria-label="Pipeline stage"></div>
+        <div id="offtrack" class="offtrack"></div>
+        <div id="fields" class="fields"></div>
+        <div id="review"></div>
+        <div id="rec-note" class="empty-note"></div>
+      </section>
+
+      <section class="card panel">
+        <h2>🧠 Agent trace</h2>
+        <div class="sub" id="trace-sub">What the agent did to write the selected reply.</div>
+        <div id="trace" class="trace"></div>
+      </section>
+
+      <section class="card panel">
+        <details class="night">
+          <summary>🌙 What runs overnight</summary>
+          <ul class="night-list">
+            <li><span>🏷️</span><span><b>Triage</b> reads new texts and call transcripts and classifies each lead's status.</span></li>
+            <li><span>🔍</span><span><b>QC</b> is a second, independent AI pass that re-checks triage. Confident disagreements are auto-corrected; unsure ones are flagged for a human.</span></li>
+            <li><span>💌</span><span><b>Follow-up</b> nudges leads who went quiet for 48h, using their actual conversation.</span></li>
+          </ul>
+        </details>
+      </section>
+    </aside>
   </div>
+</div>
+<div id="toasts" class="toasts" aria-live="polite"></div>
 
 <script>
 (function () {
-  const chatLog = document.getElementById("chat-log");
-  const input = document.getElementById("msg-input");
-  const sendBtn = document.getElementById("send-btn");
-  const resetBtn = document.getElementById("reset-btn");
-  const crmFields = document.getElementById("crm-fields");
-  const reviewFlag = document.getElementById("review-flag");
-  const phoneNote = document.getElementById("phone-note");
+  "use strict";
 
-  const STATUS_COLORS = {
-    new: "#6b7280",
-    contacted: "#2563eb",
-    qualified: "#16a34a",
-    tour_scheduled: "#7c3aed",
-    toured: "#0891b2",
-    applied: "#0d9488",
-    leased: "#a16207",
-    lost: "#dc2626",
-    unresponsive: "#ea580c",
-    not_a_lead: "#64748b",
+  // ---------- config ----------
+  const SCENARIOS = [
+    { icon: "🐾", title: "Pets & parking", steps: ["Hi! Do you allow dogs?", "And is parking included?"] },
+    { icon: "📅", title: "Book a tour", steps: ["Hi, I'm looking for a 2 bedroom apartment", "Could I tour it this Thursday at 2pm? My name is Sam"] },
+    { icon: "📝", title: "Apply & lease terms", steps: ["What do I need to apply?", "How long are the lease terms, and is there a deposit?"] },
+  ];
+  const QUICK = [
+    ["🐾 Pets?", "Do you allow pets?"],
+    ["🚗 Parking?", "Is parking included?"],
+    ["📅 Book a tour", "I'd like to book a tour of a 2 bedroom"],
+  ];
+  const STEPS = [
+    ["new", "New"], ["contacted", "Contacted"], ["qualified", "Qualified"], ["tour_scheduled", "Tour booked"],
+    ["toured", "Toured"], ["applied", "Applied"], ["leased", "Leased"],
+  ];
+  const OFF_TRACK = {
+    lost: "This lead was marked lost.",
+    unresponsive: "This lead went unresponsive.",
+    not_a_lead: "Not a real prospect (e.g. wrong number).",
   };
+  const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  function newDemoPhone() {
-    const n = Math.floor(1000000 + Math.random() * 8999999);
-    return "+1555" + n;
+  // ---------- dom ----------
+  const $ = (id) => document.getElementById(id);
+  const log = $("log"), input = $("input"), sendBtn = $("send"), resetBtn = $("reset-btn");
+  const fieldsEl = $("fields"), stepperEl = $("stepper"), offtrackEl = $("offtrack"), reviewEl = $("review");
+  const recNote = $("rec-note"), traceEl = $("trace"), toastsEl = $("toasts");
+  const scenRow = $("scen-row"), chipRow = $("chip-row");
+
+  // ---------- state ----------
+  // localStorage can throw (private windows, blocked storage) — never let that break the page.
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  let phone = loadPhone();
+  let backend = "stub";
+  let busy = false;          // a message is in flight
+  let playing = false;       // a scenario is auto-playing
+  let stopRequested = false;
+  let prevLead = null;
+  let prevFields = {};
+  let nextId = 1;
+  const entries = new Map(); // message id -> { text, meta, elapsed }
+  let selectedId = null;
+
+  // ---------- helpers ----------
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const timeStr = (d) => (d instanceof Date ? d : new Date(d)).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const dateStr = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return isNaN(d) ? "—" : d.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  };
+  function newPhone() { return "+1555" + Math.floor(1000000 + Math.random() * 8999999); }
+  function loadPhone() { let p = store.get("demo_phone"); if (!p) { p = newPhone(); store.set("demo_phone", p); } return p; }
+  function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+  // ---------- messages ----------
+  function addSystem(text, cls) {
+    const d = document.createElement("div");
+    d.className = "system" + (cls ? " " + cls : "");
+    d.textContent = text;
+    log.appendChild(d); scrollDown();
+    return d;
   }
 
-  function getPhone() {
-    let phone = localStorage.getItem("demo_phone");
-    if (!phone) {
-      phone = newDemoPhone();
-      localStorage.setItem("demo_phone", phone);
+  function tagsFor(meta) {
+    if (!meta) return "";
+    const out = [];
+    const counts = {};
+    (meta.faq_sources || []).forEach((s) => { counts[s] = (counts[s] || 0) + 1; });
+    Object.keys(counts).forEach((s) => out.push(`<span class="tag">📚 ${esc(s)}</span>`));
+    (meta.tool_calls || []).forEach((t) => out.push(`<span class="tag ${t.error ? "err" : "tool"}">🔧 ${esc(t.name)}${t.error ? " ✕" : " ✓"}</span>`));
+    return out.join("");
+  }
+
+  function addMessage(role, text, opts) {
+    opts = opts || {};
+    const id = nextId++;
+    const wrap = document.createElement("div");
+    wrap.className = "msg " + role;
+    wrap.dataset.id = id;
+    const bubble = document.createElement("div");
+    bubble.className = "bubble";
+    if (role === "agent") {
+      bubble.tabIndex = 0;
+      bubble.setAttribute("role", "button");
+      bubble.setAttribute("aria-label", "Inspect how the assistant wrote this reply");
+      const pick = () => select(id);
+      bubble.addEventListener("click", pick);
+      bubble.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
     }
-    return phone;
+    wrap.appendChild(bubble);
+
+    const meta = document.createElement("div");
+    meta.className = "msg-meta";
+    let html = `<span>${esc(timeStr(opts.ts || new Date()))}</span>`;
+    if (opts.elapsed != null) html += `<span>· replied in ${(opts.elapsed / 1000).toFixed(1)}s</span>`;
+    html += tagsFor(opts.meta);
+    meta.innerHTML = html;
+    wrap.appendChild(meta);
+
+    log.appendChild(wrap);
+    if (role === "agent") entries.set(id, { text, meta: opts.meta || null, elapsed: opts.elapsed });
+
+    if (opts.animate && !REDUCED && text.length < 600) typeInto(bubble, text); else bubble.textContent = text;
+    scrollDown();
+    return id;
   }
 
-  let phone = getPhone();
-
-  function addBubble(role, text) {
-    const div = document.createElement("div");
-    div.className = "bubble " + role;
-    div.textContent = text;
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
-    return div;
+  function typeInto(el, text) {
+    // Reveal the reply progressively; ~1.2s max regardless of length.
+    const chunk = Math.max(1, Math.ceil(text.length / 70));
+    let i = 0;
+    const timer = setInterval(() => {
+      i = Math.min(text.length, i + chunk);
+      el.textContent = text.slice(0, i);
+      scrollDown();
+      if (i >= text.length) clearInterval(timer);
+    }, 16);
   }
 
   function showTyping() {
-    const div = document.createElement("div");
-    div.className = "typing";
-    div.id = "typing-indicator";
-    div.innerHTML = "<span></span><span></span><span></span>";
-    chatLog.appendChild(div);
-    chatLog.scrollTop = chatLog.scrollHeight;
+    const d = document.createElement("div");
+    d.className = "typing"; d.id = "typing";
+    d.innerHTML = "<span></span><span></span><span></span>";
+    log.appendChild(d); scrollDown();
+  }
+  function hideTyping() { const t = $("typing"); if (t) t.remove(); }
+
+  function showWelcome() {
+    const d = document.createElement("div");
+    d.className = "welcome"; d.id = "welcome";
+    d.innerHTML = `<div class="big">💬</div><strong>You're a prospect texting Maple Grove.</strong><br/>Ask about pets, parking or lease terms, or ask to book a tour. Or press a <strong>▶ scenario</strong> below and watch it run by itself.`;
+    log.appendChild(d);
+  }
+  function clearWelcome() { const w = $("welcome"); if (w) w.remove(); }
+
+  // ---------- selection / trace ----------
+  function select(id) {
+    selectedId = id;
+    log.querySelectorAll(".msg.agent").forEach((m) => m.classList.toggle("selected", Number(m.dataset.id) === id));
+    renderTrace(entries.get(id));
   }
 
-  function hideTyping() {
-    const el = document.getElementById("typing-indicator");
-    if (el) el.remove();
+  function humanTool(t) {
+    const i = t.input || {};
+    if (t.name === "book_tour") return `Booked a tour at ${esc(i.property_name || "the property")}${i.unit ? " (" + esc(i.unit) + ")" : ""}`;
+    if (t.name === "update_crm_field") return `Updated the CRM: ${esc(i.field)} → ${esc(i.value)}`;
+    return esc(t.name);
   }
 
-  function fmtDate(iso) {
-    if (!iso) return "—";
-    try {
-      return new Date(iso).toLocaleString(undefined, {
-        month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  function renderTrace(entry) {
+    if (!entry) {
+      traceEl.innerHTML = `<div class="trace-empty">Send a message, then click any assistant reply to see exactly what it used: the FAQ passages it retrieved and the CRM actions it took.</div>`;
+      return;
+    }
+    const meta = entry.meta;
+    const steps = [];
+    steps.push(`<div class="t-step"><div class="t-ico">👤</div><div><div class="t-title">Looked up the lead</div><div class="t-body">Loaded this prospect's CRM record and recent conversation.</div></div></div>`);
+    if (meta) {
+      const counts = {};
+      (meta.faq_sources || []).forEach((s) => { counts[s] = (counts[s] || 0) + 1; });
+      const names = Object.keys(counts);
+      steps.push(`<div class="t-step"><div class="t-ico">📚</div><div><div class="t-title">Searched the FAQ knowledge base</div><div class="t-body">${
+        names.length ? "Top passages came from: " + names.map((n) => `<span class="tag">${esc(n)}${counts[n] > 1 ? " ×" + counts[n] : ""}</span>`).join(" ") : "No matching passages."
+      }</div></div></div>`);
+      const calls = meta.tool_calls || [];
+      if (!calls.length) {
+        steps.push(`<div class="t-step"><div class="t-ico">🤖</div><div><div class="t-title">No CRM actions needed</div><div class="t-body">The assistant answered directly from the conversation and FAQ.</div></div></div>`);
+      }
+      calls.forEach((t) => {
+        steps.push(`<div class="t-step tool ${t.error ? "err" : ""}"><div class="t-ico">${t.error ? "⚠️" : "🔧"}</div><div>
+          <div class="t-title">${humanTool(t)}</div>
+          <div class="code">${esc(t.name)}(${esc(JSON.stringify(t.input))})<br/><span class="${t.error ? "bad" : "ok"}">→ ${esc(t.result)}</span></div>
+        </div></div>`);
       });
-    } catch (e) {
-      return iso;
-    }
-  }
-
-  function renderLead(lead) {
-    const status = lead.status || "new";
-    const color = STATUS_COLORS[status] || "#6b7280";
-    const tour = lead.tour
-      ? `${lead.tour.property_name}${lead.tour.unit ? " (" + lead.tour.unit + ")" : ""} — ${fmtDate(lead.tour.scheduled_for)}`
-      : "None yet";
-
-    crmFields.innerHTML = `
-      <div class="crm-row"><span class="crm-label">Phone</span><span class="crm-value">${lead.phone || phone}</span></div>
-      <div class="crm-row"><span class="crm-label">Name</span><span class="crm-value">${lead.name || "—"}</span></div>
-      <div class="crm-row"><span class="crm-label">Status</span><span class="crm-value"><span class="badge" style="background:${color}">${status}</span></span></div>
-      <div class="crm-row"><span class="crm-label">Unit interest</span><span class="crm-value">${lead.unit_interest || "—"}</span></div>
-      <div class="crm-row"><span class="crm-label">Tour</span><span class="crm-value">${tour}</span></div>
-      <div class="crm-row"><span class="crm-label">Last contact</span><span class="crm-value">${fmtDate(lead.last_contact_at)}</span></div>
-    `;
-
-    if (lead.needs_review) {
-      const notes = (lead.review_notes || []).slice(-2).join(" · ");
-      reviewFlag.innerHTML = `<div class="review-flag">⚑ Flagged for review by nightly QC${notes ? ": " + notes : ""}</div>`;
     } else {
-      reviewFlag.innerHTML = "";
+      steps.push(`<div class="t-step"><div class="t-ico">ℹ️</div><div><div class="t-title">No trace stored</div><div class="t-body">This reply has no recorded details.</div></div></div>`);
     }
+    steps.push(`<div class="t-step"><div class="t-ico">💬</div><div><div class="t-title">Wrote the reply${entry.elapsed != null ? ` in ${(entry.elapsed / 1000).toFixed(1)}s` : ""}</div><div class="t-body">Claude composes the SMS from all of the above.</div></div></div>`);
+    traceEl.innerHTML = steps.join("");
   }
 
-  async function refreshLead() {
-    try {
-      const res = await fetch(`/demo/lead/${encodeURIComponent(phone)}`);
-      if (res.ok) renderLead(await res.json());
-    } catch (e) {
-      // demo panel is best-effort; chat errors are surfaced separately
-    }
+  // ---------- lead record ----------
+  function renderLead(lead) {
+    const status = lead ? lead.status : null;
+    const idx = STEPS.findIndex((s) => s[0] === status);
+    const off = status && idx === -1;
+
+    stepperEl.className = "stepper" + (off ? " off" : "");
+    stepperEl.innerHTML = STEPS.map((s, i) => {
+      const cls = idx === -1 ? "" : i < idx ? "done" : i === idx ? "current" : "";
+      return `<div class="step ${cls}"><div class="node"></div><div class="lbl">${esc(s[1])}</div></div>`;
+    }).join("");
+    offtrackEl.className = "offtrack" + (off ? " show" : "");
+    offtrackEl.textContent = off ? OFF_TRACK[status] || status : "";
+
+    const tour = lead && lead.tour
+      ? `${lead.tour.property_name}${lead.tour.unit ? " (" + lead.tour.unit + ")" : ""} · ${dateStr(lead.tour.scheduled_for)}`
+      : "—";
+    const rows = [
+      ["phone", "Phone", lead ? lead.phone : phone],
+      ["name", "Name", lead && lead.name ? lead.name : "—"],
+      ["status", "Status", lead ? lead.status : "—"],
+      ["unit", "Unit interest", lead && lead.unit_interest ? lead.unit_interest : "—"],
+      ["tour", "Tour", tour],
+      ["contact", "Last contact", lead ? dateStr(lead.last_contact_at) : "—"],
+    ];
+    fieldsEl.innerHTML = rows.map((r) => {
+      const changed = lead && prevLead && prevFields[r[0]] !== undefined && prevFields[r[0]] !== String(r[2]);
+      return `<div class="field${changed ? " changed" : ""}"><span class="k">${esc(r[1])}</span><span class="v">${esc(r[2])}</span></div>`;
+    }).join("");
+    prevFields = {}; rows.forEach((r) => { prevFields[r[0]] = String(r[2]); });
+
+    reviewEl.innerHTML = lead && lead.needs_review
+      ? `<div class="review">⚑ Flagged for human review by nightly QC${lead.review_notes && lead.review_notes.length ? ": " + esc(lead.review_notes.slice(-2).join(" · ")) : ""}</div>` : "";
+    recNote.textContent = lead ? "" : "The lead is created when the first message arrives.";
   }
 
-  async function loadHistory() {
-    try {
-      const res = await fetch(`/demo/history/${encodeURIComponent(phone)}`);
-      if (!res.ok) return;
-      const messages = await res.json();
-      chatLog.innerHTML = "";
-      if (messages.length === 0) {
-        addBubble("system", "Send a message below to start the conversation.");
-      }
-      for (const m of messages) {
-        addBubble(m.direction === "inbound" ? "user" : "agent", m.body);
-      }
-    } catch (e) {
-      addBubble("system", "Couldn't load conversation history — the server may not be running.");
+  function toastChanges(next) {
+    if (!prevLead) return;
+    const msgs = [];
+    if (prevLead.status !== next.status) msgs.push(`Status <b>${esc(prevLead.status)} → ${esc(next.status)}</b>`);
+    if ((prevLead.name || "") !== (next.name || "") && next.name) msgs.push(`Name <b>${esc(next.name)}</b>`);
+    if ((prevLead.unit_interest || "") !== (next.unit_interest || "") && next.unit_interest) msgs.push(`Unit interest <b>${esc(next.unit_interest)}</b>`);
+    if (JSON.stringify(prevLead.tour) !== JSON.stringify(next.tour) && next.tour) msgs.push(`Tour booked <b>${esc(dateStr(next.tour.scheduled_for))}</b>`);
+    msgs.forEach((m, i) => setTimeout(() => toast("CRM updated · " + m), i * 250));
+  }
+  function toast(html) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.innerHTML = html;
+    toastsEl.appendChild(t);
+    setTimeout(() => t.remove(), 4200);
+  }
+
+  function updateLead(lead, opts) {
+    if (opts && opts.notify) toastChanges(lead);
+    renderLead(lead);
+    prevLead = lead;
+  }
+
+  // ---------- network ----------
+  async function api(path, options) {
+    const res = await fetch(path, options);
+    if (!res.ok) {
+      let detail = "";
+      try { detail = (await res.json()).detail || ""; } catch (e) {}
+      throw new Error(detail || "Server error " + res.status);
     }
+    return res.json();
   }
 
   async function sendMessage(text) {
     text = text.trim();
-    if (!text) return;
-    addBubble("user", text);
-    input.value = "";
-    sendBtn.disabled = true;
+    if (!text || busy) return false;
+    busy = true; setControls();
+    clearWelcome();
+    addMessage("user", text);
+    input.value = ""; autoGrow();
     showTyping();
-
     try {
-      const res = await fetch("/demo/chat", {
+      const data = await api("/demo/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, body: text }),
       });
       hideTyping();
-      if (!res.ok) throw new Error("Server error " + res.status);
-      const data = await res.json();
-      addBubble("agent", data.reply || "(no reply)");
-      refreshLead();
+      const id = addMessage("agent", data.reply || "(no reply)", { meta: data.meta, elapsed: data.elapsed_ms, animate: true });
+      select(id);
+      if (data.lead) updateLead(data.lead, { notify: true });
+      return true;
     } catch (e) {
       hideTyping();
-      addBubble("system", "Couldn't reach the demo server. Is it running on this address? (" + e.message + ")");
+      addSystem("Couldn't get a reply: " + e.message, "error");
+      return false;
     } finally {
-      sendBtn.disabled = false;
-      input.focus();
+      busy = false; setControls();
+      if (!playing) input.focus();
     }
   }
 
-  sendBtn.addEventListener("click", () => sendMessage(input.value));
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") sendMessage(input.value);
+  async function loadExisting() {
+    try {
+      const messages = await api(`/demo/history/${encodeURIComponent(phone)}`);
+      if (!messages.length) { showWelcome(); renderLead(null); renderTrace(null); return; }
+      let lastAgent = null;
+      messages.forEach((m) => {
+        if (m.direction === "inbound") addMessage("user", m.body, { ts: m.timestamp });
+        else lastAgent = addMessage("agent", m.body, { ts: m.timestamp, meta: m.ai_meta });
+      });
+      if (lastAgent) select(lastAgent);
+      const lead = await api(`/demo/lead/${encodeURIComponent(phone)}`);
+      updateLead(lead);
+    } catch (e) {
+      showWelcome(); renderLead(null); renderTrace(null);
+      addSystem("Couldn't load the conversation — is the server running?", "error");
+    }
+  }
+
+  // ---------- conversation control ----------
+  function newConversation(announce) {
+    phone = newPhone(); store.set("demo_phone", phone);
+    log.innerHTML = ""; entries.clear(); selectedId = null; prevLead = null; prevFields = {};
+    $("you-are").textContent = "Texting as " + phone;
+    renderLead(null); renderTrace(null);
+    if (announce) addSystem(announce); else showWelcome();
+  }
+
+  async function typeIntoInput(text) {
+    input.value = "";
+    for (let i = 1; i <= text.length; i++) {
+      if (stopRequested) return false;
+      input.value = text.slice(0, i); autoGrow();
+      await sleep(REDUCED ? 0 : 16);
+    }
+    return true;
+  }
+
+  async function playScenario(s) {
+    if (playing || busy) return;
+    playing = true; stopRequested = false; setControls();
+    newConversation("▶ Demo: " + s.title + " — starting a fresh conversation");
+    await sleep(500);
+    for (const step of s.steps) {
+      if (stopRequested) break;
+      if (!(await typeIntoInput(step))) break;
+      await sleep(250);
+      if (!(await sendMessage(step))) break;
+      await sleep(900);
+    }
+    if (stopRequested) addSystem("Demo stopped — keep chatting yourself, or start another scenario.");
+    else addSystem("That's the whole flow. Click any assistant reply to see what it did, or type your own message.");
+    playing = false; stopRequested = false; setControls();
+    input.value = ""; autoGrow(); input.focus();
+  }
+
+  function setControls() {
+    const lock = busy || playing;
+    sendBtn.disabled = lock;
+    input.disabled = playing;
+    chipRow.querySelectorAll("button").forEach((b) => { b.disabled = lock; });
+    scenRow.querySelectorAll(".scen:not(.stop)").forEach((b) => { b.disabled = lock; });
+    const stop = scenRow.querySelector(".stop");
+    if (stop) stop.hidden = !playing;
+    resetBtn.disabled = playing;
+  }
+
+  function autoGrow() {
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 110) + "px";
+    input.style.overflowY = input.scrollHeight > 110 ? "auto" : "hidden";
+  }
+
+  // ---------- wire up ----------
+  SCENARIOS.forEach((s) => {
+    const b = document.createElement("button");
+    b.className = "scen"; b.type = "button";
+    b.innerHTML = `<span>${s.icon}</span><span>${esc(s.title)}</span>`;
+    b.addEventListener("click", () => playScenario(s));
+    scenRow.appendChild(b);
   });
-  document.querySelectorAll(".chip").forEach((chip) => {
-    chip.addEventListener("click", () => sendMessage(chip.dataset.msg));
-  });
-  resetBtn.addEventListener("click", () => {
-    phone = newDemoPhone();
-    localStorage.setItem("demo_phone", phone);
-    chatLog.innerHTML = "";
-    crmFields.innerHTML = "";
-    reviewFlag.innerHTML = "";
-    phoneNote.textContent = "Demo phone: " + phone;
-    addBubble("system", "New conversation started.");
-    refreshLead();
+  const stopBtn = document.createElement("button");
+  stopBtn.className = "scen stop"; stopBtn.type = "button"; stopBtn.hidden = true; stopBtn.textContent = "■ Stop";
+  stopBtn.addEventListener("click", () => { stopRequested = true; });
+  scenRow.appendChild(stopBtn);
+
+  QUICK.forEach(([label, msg]) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.type = "button"; b.textContent = label;
+    b.addEventListener("click", () => sendMessage(msg));
+    chipRow.appendChild(b);
   });
 
-  phoneNote.textContent = "Demo phone: " + phone;
-  loadHistory();
-  refreshLead();
-  input.focus();
+  sendBtn.addEventListener("click", () => sendMessage(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendMessage(input.value); }
+  });
+  input.addEventListener("input", autoGrow);
+  resetBtn.addEventListener("click", () => newConversation());
+  $("theme-btn").addEventListener("click", () => {
+    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    store.set("demo_theme", next);
+  });
+
+  // The CRM pill / record label say honestly what is behind the panel.
+  fetch("/demo/config").then((r) => r.json()).then((c) => {
+    backend = c.crm_backend;
+    const live = backend === "monday";
+    $("crm-pill").className = "pill" + (live ? " live" : "");
+    $("crm-pill-text").textContent = live ? "CRM: live on Monday.com" : "CRM: simulated locally";
+    $("rec-source").textContent = live ? "Monday.com" : "simulated";
+  }).catch(() => { $("crm-pill-text").textContent = "CRM"; });
+
+  $("you-are").textContent = "Texting as " + phone;
+  setControls();
+  loadExisting();
 })();
 </script>
 </body>

@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.batch.follow_up import run
 from app.config import get_settings
-from app.integrations.monday.stub import StubCrmClient
+from app.integrations.monday.factory import build_crm_client
 from app.integrations.quo.stub import StubQuoClient
 from app.logging_.conversation_log import ConversationLogStore
 
@@ -33,7 +33,7 @@ def main() -> None:
     args = parser.parse_args()
 
     settings = get_settings()
-    crm = StubCrmClient(settings.crm_store_path)
+    crm = build_crm_client(settings)
     quo = StubQuoClient(settings.stub_calls_path)
     log_store = ConversationLogStore(settings.conversations_dir)
 
